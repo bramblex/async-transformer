@@ -1,0 +1,15 @@
+{
+  "name": "async-transformer",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/bramblex/async-transformer.git",
+  "author": "brambles<qjnight@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "^8.4.1",
+    "astring": "^1.7.5"
+  },
+  "scripts": {
+    "test": "node test.js"
+  }
+}
