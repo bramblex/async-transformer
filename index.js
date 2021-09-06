@@ -1,2 +1,2 @@
 
-exports.transform =  require('./src/transform').transform;
+exports.transform =  require('./src/transformer').transform;
