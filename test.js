@@ -5,7 +5,7 @@ const { transform } = require('./');
 
 function log(data) {
   for (const [key, value] of Object.entries(data)) {
-    console.log(`${'='.repeat(20)}[SourceCode]${'='.repeat(20)}`);
+    console.log(`${'='.repeat(20)}[${key}]${'='.repeat(20)}`);
     console.log(value);
   }
 }
