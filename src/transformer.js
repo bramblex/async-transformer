@@ -14,7 +14,7 @@ const { pattern, match, guard, capture } = require('./pattern-match');
 
 没实现的
 1. 不支持其他各种函数表达式，不支持函数里面嵌套定义
-2. 不支持 ? : / && / || 等对控制有影响的表达式
+2. 不支持 ? : / && / || 等对运算顺序有影响的表达式
 
 Pass
 1. 全图变量收集 / 标记 / 链接 / 引用的 scope，将信息附带到 AST 上，用于全图改名
@@ -22,12 +22,13 @@ Pass
 3. 控制流分析
   1. if / else if / else 全部转换成 if / else 形式
   2. 所有循环都转换成 while 循环
-  3. 将所有代码准换成 label / goto 形式
+  3. 最后将所有代码准换成 label / goto 形式
 4. 将 label / goto 形式转换成 switch case 形式
 
 Runtime
-1. asyncRunner
+1. runner
 
+编译的语言支持范围 ES5 + async / await （其他支持起来太麻烦了
 */
 
 // 捕获 async 函数
