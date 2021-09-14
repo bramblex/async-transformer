@@ -43,7 +43,7 @@ const pattern = rule => {
     return rule;
   } else if (Array.isArray(rule)) {
     return pattern.array(rule);
-  } else if (typeof rule === 'object') {
+  } else if (rule && typeof rule === 'object') {
     return pattern.struct(rule);
   } else {
     return pattern.equal(rule);

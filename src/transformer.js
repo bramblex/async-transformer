@@ -1,15 +1,9 @@
-const acorn = require('acorn');
-const astring = require('astring');
-const prettier = require('prettier');
-const { traverse } = require('./ast-traverse');
-const { pattern, match, guard, capture } = require('./pattern-match');
-
 /*
 
 仅实现最基本功能 demo
-1. 只支持文件根下面的 FunctionDeclare
-2. 分支支持 if / else if / else
-3. 循环只支持 for(;;;) / for of (仅支持数组) / while
+1. 只支持 FunctionDeclare | FunctionExpression
+2. 分支支持 if / else
+3. 循环只支持 for(;;;) / while
 3. 自动改无冲突变量名
 
 没实现的
@@ -28,26 +22,30 @@ Pass
 Runtime
 1. runner
 
-编译的语言支持范围 ES5 + async / await （其他支持起来太麻烦了
+编译的语言支持范围 ES5 + async / await （
 */
 
-// 捕获 async 函数
-const asyncFunctionPattern = pattern({
-  type: 'FunctionDeclaration',
-  async: true,
-  body: {
-    type: 'BlockStatement',
-    body: capture('body'),
-  },
-});
+const acorn = require('acorn');
+const astring = require('astring');
+const prettier = require('prettier');
+const { traverse } = require('./ast-traverse');
+const { pattern, match, guard, capture } = require('./pattern-match');
 
+const { SupportedChecker, defaultSupported } = require('./supported-checker');
+const checker = new SupportedChecker(defaultSupported);
 
+// 转换器入口
 const transform = source => {
   // 解析代码
   const sourceNode = acorn.parse(source, { ecmaVersion: 'latest' });
 
+  // 语法检查，检查 input 代码是否符合 demo 能接受的语法，不符合报错
+  checker.check(sourceNode, source);
+
   // 转换器入口
-  const traverser = traverse((node, next) => guard(node, [[pattern.unit, () => next(node)]]));
+  const traverser = traverse((node, next) => guard(node, [
+    [pattern.unit, () => next(node)]
+  ]));
 
   const targetNode = traverser(sourceNode);
 
