@@ -1,4 +1,4 @@
-const capture = (name, rule) => {
+const capture = (name, rule = pattern.unit) => {
   const p = pattern(rule);
 
   return pattern.create(target => {
