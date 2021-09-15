@@ -310,7 +310,7 @@ function __async(creator) {
           return resolve(result);
         } else {
           context.next = next
-          if (result.then) {
+          if (result && result.then) {
             result.then(d => {
               context.sent = d;
               step();
