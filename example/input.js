@@ -1,13 +1,19 @@
 
 
-async function delay(n) {
-  return new Promise(function (resolve) { setTimeout(resolve, n) })
-}
-
-
 async function testFunc() {
+  var i = 0;
+  while (i < 10) {
 
-  return 'hello world';
+    if (i % 2 === 0) {
+      console.log('偶数');
+    }
+
+    i++;
+  }
+
+  var a = await hello();
+
+  return i;
 }
 
 module.exports = testFunc;

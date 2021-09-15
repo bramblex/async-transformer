@@ -13,7 +13,6 @@ const defaultSupported = {
   ReturnStatement: pattern.unit,
   IfStatement: pattern.unit,
   WhileStatement: pattern.unit,
-  ForStatement: pattern.unit,
   FunctionDeclaration: pattern({ generator: false }),
   VariableDeclaration: pattern({ kind: 'var' }),
   VariableDeclarator: pattern.unit,
@@ -21,12 +20,14 @@ const defaultSupported = {
   ObjectExpression: pattern.unit,
   Property: pattern.unit,
   FunctionExpression: pattern({ generator: false, async: false }),
+  UpdateExpression: pattern.unit,
   UnaryExpression: pattern.unit,
   BinaryExpression: pattern.unit,
   AssignmentExpression: pattern({ operator: '=' }),
   MemberExpression: pattern.unit,
   CallExpression: pattern.unit,
   NewExpression: pattern.unit,
+  AwaitExpression: pattern.unit,
 };
 
 

@@ -16,12 +16,12 @@ async function __main__() {
   const targetCode = transform(sourceCode);
   log({ targetCode }); 
   fs.writeFileSync(path.join(__dirname, 'example', 'output.js'), targetCode);
-  const sourceResult = await require('./example/input')();
-  log({ sourceResult }); 
-  const targetResult = await require('./example/output')();
-  log({ targetResult }); 
-  assert.deepStrictEqual(sourceResult, targetResult);
-  log({ testResult: 'all pass' }); 
+  // const sourceResult = await require('./example/input')();
+  // log({ sourceResult }); 
+  // const targetResult = await require('./example/output')();
+  // log({ targetResult }); 
+  // assert.deepStrictEqual(sourceResult, targetResult);
+  // log({ testResult: 'all pass' }); 
 }
 
 __main__();
