@@ -1,18 +1,16 @@
 /*
 
 仅实现最基本功能 demo
-1. 只支持 FunctionDeclare | FunctionDeclare 
+1. 只支持 FunctionDeclaration
 2. 分支支持 if / else
 3. 循环只支持 for(;;;) / while
-3. 自动改无冲突变量名
 
 没实现的
 1. 不支持其他各种函数表达式，不支持函数里面嵌套定义
 2. 不支持 ? : / && / || 等对运算顺序有影响的表达式
 
 Pass
-1. 全图变量收集 / 标记 / 链接 / 引用的 scope，将信息附带到 AST 上，用于全图改名
-2. 表达式分析，将 await 部分从表达式拆出来，自动添加 _temp 变量（全图无冲突）
+2. 表达式分析，将 await 部分从表达式拆出来，自动添加 _temp 变量
 3. 控制流分析
   1. if / else if / else 全部转换成 if / else 形式
   2. 所有循环都转换成 while 循环
