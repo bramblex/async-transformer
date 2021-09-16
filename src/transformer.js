@@ -17,7 +17,7 @@ Pass
 Runtime
 1. runner
 
-编译的语言支持范围 ES5 + async / await （
+编译的语言支持范围 ES5 + async / await
 */
 
 const acorn = require('acorn');

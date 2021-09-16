@@ -21,7 +21,7 @@ async function __main__() {
   const targetResult = await require('./example/output')();
   log({ targetResult }); 
   assert.deepStrictEqual(sourceResult, targetResult);
-  log({ testResult: 'all pass' }); 
+  log({ testResult: 'pass' }); 
 }
 
 __main__();
