@@ -132,7 +132,7 @@ const statTrans = (stat, ctx) => {
     IfStatement: ({ test, consequent, alternate }) => {
       const branch = IfStatement(exprTrans(test, ctx), Return(), Return());
       ctx.write(branch);
-      ctx.writeLabel([brach.consequent]);
+      ctx.writeLabel([branch.consequent]);
       statTrans(consequent, ctx);
 
       if (alternate) {

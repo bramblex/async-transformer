@@ -14,12 +14,17 @@ async function testFunc() {
     sum = sum + d;
 
     i++;
+    if (i < 5) {
+      sum++;
+    } else {
+      sum--;
+    }
   }
 
   var arr = [];
   arr[await delay(1e2, 10)] = 123;
 
-  return sum;
+  return sum + arr[10];
 }
 
 module.exports = testFunc;
