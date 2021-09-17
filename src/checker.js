@@ -2,6 +2,7 @@ const { pattern } = require('./pattern');
 const { traverse } = require('./traverse');
 const chalk = require('chalk');
 
+// 默认支持的语法
 const defaultSupported = {
   Identifier: pattern.unit,
   Literal: pattern.unit,
@@ -69,7 +70,7 @@ class SupportedChecker {
   };
 
   check(root, source) {
-    traverse((node, next) => {
+    traverse((node, _, next) => {
       const { type } = node;
       const testFunc = this.supported[type];
       if (!testFunc || !testFunc(node)) {

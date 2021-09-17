@@ -42,7 +42,7 @@ const pattern = rule => {
   if (typeof rule === 'function' && rule.__pattern__ === pattern) {
     return rule;
   } else if (Array.isArray(rule)) {
-    return pattern.array(rule);
+    return pattern.tuple(rule);
   } else if (rule && typeof rule === 'object') {
     return pattern.struct(rule);
   } else {
@@ -129,33 +129,6 @@ pattern.tuple = function tuple(rules) {
         }
       }
       return true;
-    }
-    return false;
-  });
-};
-
-// 数组类
-pattern.array = rules => {
-  const ps = rules.map(pattern);
-  return pattern.create(target => {
-    if (Array.isArray(target)) {
-      const rs = ps.map(() => false);
-      let rn = rs.length;
-      for (const item of target) {
-        for (let i = 0; i < ps.length; i++) {
-          if (rs[i]) {
-            continue;
-          }
-          if (ps[i](item)) {
-            rs[i] = true;
-            rn = rn + 1;
-          }
-          if (rn === 0) {
-            return true;
-          }
-        }
-      }
-      return rn === 0;
     }
     return false;
   });

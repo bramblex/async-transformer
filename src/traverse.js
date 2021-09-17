@@ -1,36 +1,37 @@
-function isChildNode(target) {
-  return Array.isArray(target) || (target && typeof target.type === 'string');
-}
 
-function getChildrenKeys(node) {
-  return Object.keys(node).filter(key => isChildNode(node[key]));
-}
+const isNode = target =>
+  target && typeof target.type === 'string';
 
-exports.traverse = function (func) {
-  return function traverse(node) {
-    return func(node, function next(nextNode) {
-      if (nextNode && nextNode.type) {
-        const keys = getChildrenKeys(nextNode) || [];
+const isNodeArray = target =>
+  Array.isArray(target) && target[0] && isNode(target[0]);
 
-        for (const key of keys) {
-          const child = nextNode[key];
+const isChildNode = target =>
+  isNodeArray(target) || isNode(target);
 
-          if (!child) {
-            continue;
-          }
+const getChildrenKeys = node =>
+  Object.keys(node).filter(key => isChildNode(node[key]));
 
-          if (Array.isArray(child)) {
-            for (let i = 0; i < child.length; i++) {
-              if (child[i]) {
-                child[i] = traverse(child[i]);
-              }
-            }
-          } else {
-            nextNode[key] = traverse(child);
-          }
+const traverseChildren = func => (node, ctx) => {
+  if (isNode(node)) {
+    for (const key of getChildrenKeys(node)) {
+      if (Array.isArray(node[key])) {
+        for (let i = 0; i < node[key].length; i++) {
+          node[key][i] = node[key][i] && func(node[key][i], ctx);
         }
+      } else {
+        node[key] = func(node[key], ctx);
       }
-      return nextNode;
-    });
-  };
+    }
+  }
+  return node;
+}
+
+const traverse = func => {
+  const _traverse = (node, ctx) => func(node, ctx, _traverseChildren);
+  const _traverseChildren = traverseChildren(_traverse);
+  return _traverse;
 };
+
+module.exports = {
+  traverse,
+}

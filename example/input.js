@@ -10,11 +10,14 @@ async function testFunc() {
   var sum = 0;
   var d = 0;
   while (i < 10) {
-    d = d + await delay(1e2, i);
+    d = d + await delay(1e2, await delay(1e2, i));
     sum = sum + d;
 
     i++;
   }
+
+  var arr = [];
+  arr[await delay(1e2, 10)] = 123;
 
   return sum;
 }

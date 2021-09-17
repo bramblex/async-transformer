@@ -1,75 +1,10 @@
-
-function Return(nu, data) {
-  const elements = [
-    {
-      type: "Literal",
-      value: nu,
-    },
-  ]
-
-  if (data) {
-    elements.push(data);
-  }
-
-  return {
-    type: "ReturnStatement",
-    argument: {
-      type: "ArrayExpression",
-      elements,
-    }
-  }
-}
-
-function Label(nu) {
-  return {
-    type: 'Label',
-    nu,
-  };
-}
-
-function IfElse(test, consequent, alternate) {
-  return {
-    type: 'IfStatement',
-    test,
-    consequent,
-    alternate,
-  };
-}
+// 编辑
 
 function Identifier(name) {
   return {
     type: 'Identifier',
     name,
   }
-}
-
-function Assignment(name, expr) {
-  return {
-    type: "ExpressionStatement",
-    expression: {
-      type: "AssignmentExpression",
-      operator: "=",
-      left: {
-        type: "Identifier",
-        name,
-      },
-      right: expr,
-    }
-  }
-}
-
-function Member(obj, prop) {
-  return {
-    type: "MemberExpression",
-    object: {
-      type: "Identifier",
-      name: obj,
-    },
-    property: {
-      type: "Identifier",
-      name: prop,
-    },
-  };
 }
 
 function Literal(value) {
@@ -79,13 +14,113 @@ function Literal(value) {
   }
 }
 
+function ReturnStatement(argument) {
+  return {
+    type: "ReturnStatement",
+    argument,
+  }
+}
+
+function ArrayExpression(elements) {
+  return {
+    type: "ArrayExpression",
+    elements,
+  };
+}
+
+function IfStatement(test, consequent, alternate) {
+  return {
+    type: 'IfStatement',
+    test,
+    consequent,
+    alternate,
+  };
+}
+
+function AssignmentStatement(left, right) {
+  return {
+    type: "ExpressionStatement",
+    expression: {
+      type: "AssignmentExpression",
+      operator: "=",
+      left: left,
+      right: right,
+    }
+  }
+}
+
+function MemberExpression(obj, prop) {
+  return {
+    type: "MemberExpression",
+    object: obj,
+    property: prop,
+  };
+}
+
+function SwitchStatement(discriminant, cases = []) {
+  return {
+    type: "SwitchStatement",
+    discriminant: discriminant,
+    cases,
+  };
+}
+
+function SwitchCase(test, consequent = []) {
+  return {
+    type: 'SwitchCase',
+    test,
+    consequent
+  };
+}
+
+function FunctionExpression(id = null, params = [], body = []) {
+  return {
+    type: 'FunctionExpression',
+    params,
+    id,
+    body: {
+      type: 'BlockStatement',
+      body,
+    },
+  };
+}
+
+function VariableDeclaration(declarations) {
+  return {
+    type: 'VariableDeclaration',
+    kind: 'var',
+    declarations: declarations.map(([id, init]) => ({
+      type: 'VariableDeclarator',
+      id,
+      init,
+    })),
+  };
+}
+
+function CallExpression(callee, arguments = []) {
+  return {
+    type: 'CallExpression',
+    callee,
+    arguments
+  };
+}
+
+function EmptyStatement() {
+  return { type: 'EmptyStatement' };
+}
 
 module.exports = {
-  Return,
-  Label,
-  IfElse,
   Identifier,
-  Assignment,
-  Member,
   Literal,
+  ReturnStatement,
+  ArrayExpression,
+  IfStatement,
+  AssignmentStatement,
+  MemberExpression,
+  SwitchStatement,
+  SwitchCase,
+  FunctionExpression,
+  VariableDeclaration,
+  EmptyStatement,
+  CallExpression,
 };

@@ -23,12 +23,239 @@ Runtime
 const acorn = require('acorn');
 const astring = require('astring');
 const prettier = require('prettier');
+
 const { traverse } = require('./traverse');
 const { pattern, guard, capture } = require('./pattern');
-const { Return, Label, IfElse, Identifier, Assignment, Member } = require('./ast-gen');
+const {
+  ReturnStatement,
+  ArrayExpression,
+  Literal,
+  FunctionExpression,
+  EmptyStatement,
+  VariableDeclaration,
+  CallExpression,
+  SwitchStatement,
+  MemberExpression,
+  SwitchCase,
+  AssignmentStatement,
+  IfStatement,
+  Identifier,
+} = require('./ast-gen');
+
 
 const { SupportedChecker, defaultSupported } = require('./checker');
 const checker = new SupportedChecker(defaultSupported);
+
+function Label(nu) {
+  return {
+    type: 'Label',
+    nu: nu,
+  };
+}
+
+function Return(nu, data) {
+  const elements = [Literal(nu)];
+  if (data) {
+    elements.push(data);
+  }
+  return ReturnStatement(ArrayExpression(elements));
+}
+
+const exprTrans = (expr, ctx) => {
+  ctx.tempNu = 0;
+  return traverse((node, ctx, next) => {
+    // 遇到函数表达式
+    if (node.type === 'FunctionExpression') {
+      return asyncTrans(node);
+    // 遇到 await 语句
+    } else if (node.type === 'AwaitExpression') {
+      next(node, ctx);
+
+      const tempId = Identifier(ctx.getTempName());
+      const wait = ctx.write(Return(null, node.argument));
+      ctx.writeLabel([wait]);
+      ctx.write(AssignmentStatement(
+        tempId,
+        MemberExpression(Identifier('__context'), Identifier('sent')),
+      ));
+      
+      return tempId;
+    }
+    return next(node, ctx);
+  })(expr, ctx);
+}
+
+const statTrans = (stat, ctx) => {
+  const trans = ({
+    // 遇到 blockStatement 递归处理
+    BlockStatement: ({ body }) => {
+      for (const state of body) {
+        statTrans(state, ctx);
+      }
+    },
+
+    // 函数定义
+    FunctionExpression: ({ id }) => {
+      ctx.declare(id);
+      // 递归要康一眼里面有没有 async 函数的定义
+      const newStat = asyncTrans(stat);
+      if (newStat.type === 'VariableDeclaration') {
+        for (const { id, init } of declarations) {
+          ctx.declare(id, init);
+          if (init) {
+            ctx.write(AssignmentStatement(id, init));
+          }
+        }
+      } else {
+        ctx.write(newStat);
+      }
+    },
+
+    // 变量定义
+    VariableDeclaration: ({ declarations }) => {
+      for (const { id, init } of declarations) {
+        ctx.declare(id);
+        if (init) {
+          ctx.write(AssignmentStatement(id, exprTrans(init, ctx)));
+        }
+      }
+    },
+
+    // 遇到表达式，用表达式处理器
+    ExpressionStatement: ({ expression }) => {
+      const newExpression = exprTrans(expression, ctx);
+      stat.expression = newExpression;
+      ctx.write(stat);
+    },
+
+    // 遇到 if else 语句
+    IfStatement: ({ test, consequent, alternate }) => {
+      const branch = IfStatement(exprTrans(test, ctx), Return(), Return());
+      ctx.write(branch);
+      ctx.writeLabel([brach.consequent]);
+      statTrans(consequent, ctx);
+
+      if (alternate) {
+        const end = ctx.write(Return());
+        ctx.writeLabel([branch.alternate]);
+        statTrans(alternate, ctx);
+        ctx.writeLabel([end]);
+      } else {
+        ctx.writeLabel([branch.alternate]);
+      }
+    },
+
+    // 遇到 while 语句
+    WhileStatement: ({ test, body }) => {
+      const top = ctx.writeLabel();
+      const ifStat = ctx.write(
+        IfStatement(exprTrans(test, ctx), Return(), Return())
+      );
+
+      ctx.writeLabel([ifStat.consequent]);
+      statTrans(body, ctx);
+      ctx.write(Return(top.nu));
+
+      ctx.writeLabel([ifStat.alternate]);
+    },
+
+    // 遇到 return 语句数据结束语句
+    ReturnStatement: ({ argument }) => ctx.write(Return(-1, argument)),
+
+    // @TODO: 其他的语句也可以自己按照规则实现
+  })[stat.type];
+
+  return (trans || (() => ctx.write(stat)))(stat);
+}
+
+// 找到 Async 并做处理
+const asyncTrans = traverse((node, _, next) => {
+  // 判断是 async 函数则开始做转换
+  if (node.type === 'FunctionDeclaration' && node.async) {
+    const { id: { name }, params, body } = node;
+
+    // 准备代码生成的上下文
+    const ctx = {
+      tempNu: 0,
+      labelNu: 0,
+      statements: [Label(0)],
+      variables: new Set(),
+
+      write(statement) {
+        this.statements.push(statement);
+        return statement;
+      },
+
+      declare({ name }) {
+        this.variables.add(name);
+      },
+
+      writeLabel(writeBacks = []) {
+        const last = this.statements[this.statements.length - 1];
+        const label = last.type === 'Label' ? last : Label(++this.labelNu);
+        // 回填
+        for (const item of writeBacks) {
+          item.argument.elements[0].value = label.nu;
+        }
+        return this.write(label);
+      },
+
+      getTempName() {
+        const name = `__temp${this.tempNu++}`;
+        this.declare({ name });
+        return name;
+      },
+    };
+
+    // 开始代码转换
+    statTrans(body, ctx);
+
+    // 将线性的代码组装成
+    const [head, ...tail] = ctx.statements;
+    const generatorBody = SwitchStatement(
+      MemberExpression(Identifier('__context'), Identifier('next')),
+      tail.reduce((cases, stat) => {
+        if (stat.type === 'Label') {
+          cases.push(SwitchCase(Literal(stat.nu)));
+        } else {
+          const last = cases[cases.length - 1];
+          last.consequent.push(stat);
+        }
+        return cases;
+      }, [SwitchCase(Literal(head.nu))])
+    );
+
+    // 转换后的基本框架
+    return VariableDeclaration([
+      [
+        Identifier(name),
+        CallExpression(
+          Identifier('__async'),
+          [
+            FunctionExpression(null, params, [
+              ctx.variables.size > 0
+                ? VariableDeclaration(
+                  Array.from(ctx.variables).map(name => [Identifier(name), null]))
+                : EmptyStatement(),
+
+              // 转换后的函数体
+              ReturnStatement(
+                FunctionExpression(
+                  null,
+                  [Identifier('__context')],
+                  [
+                    generatorBody, Return(-1)
+                  ]),
+              ),
+            ]),
+          ]
+        )
+      ],
+    ]);
+  }
+  // 不是 async 函数继续向下遍历
+  return next(node);
+});
 
 // 转换器入口
 const transform = source => {
@@ -39,255 +266,7 @@ const transform = source => {
   checker.check(sourceNode, source);
 
   // 转换器入口
-  const replacer = traverse((replacerNode, replacerNext) => guard(replacerNode, [
-    [
-      // 匹配 async 函数
-      {
-        type: 'FunctionDeclaration',
-        async: true,
-        params: capture('params'),
-        body: capture('body'),
-        id: {
-          type: 'Identifier',
-          name: capture('name'),
-        },
-      },
-      ({ params, body, name }) => {
-
-        // 结果
-        let linerStatements = [];
-        const variables = new Set();
-
-        // label
-        const getLabelNu = (() => {
-          let labelNu = 0;
-          return () => ++labelNu
-        })();
-
-        // 块分析器
-        const blockReplacer = blockNode => {
-          const { body } = blockNode;
-          for (const node of body) {
-            statReplacer(node);
-          }
-        }
-
-        // 命令分析器
-        const statReplacer = statNode => {
-          guard(statNode, [
-            [{ type: 'ExpressionStatement', expression: capture('expression') }, ({ expression }) => {
-              statNode.expression = exprReplacer(expression);
-              linerStatements.push(statNode);
-            }],
-            [{ type: 'BlockStatement' }, () => blockReplacer(statNode)],
-            [{ type: 'ReturnStatement', argument: capture('argument') }, ({ argument }) => {
-              linerStatements.push(Return(-1, argument));
-            }],
-            [
-              { type: 'IfStatement', test: capture('test'), consequent: capture('consequent'), alternate: capture('alternate') },
-              ({ test, consequent, alternate }) => {
-                const exprNode = exprReplacer(test);
-
-                const endReturn = Return();
-                const ifStat = IfElse(exprNode, Return(), alternate ? Return() : endReturn);
-
-                linerStatements.push(ifStat);
-
-                const consequentNu = getLabelNu();
-                ifStat.consequent.argument.elements[0].value = consequentNu;
-                linerStatements.push(Label(consequentNu));
-                statReplacer(consequent);
-
-                if (alternate) {
-                  linerStatements.push(endReturn);
-                  const alternateNu = getLabelNu()
-                  ifStat.alternate.argument.elements[0].value = alternateNu;
-                  linerStatements.push(Label(alternateNu));
-                  statReplacer(alternate);
-                }
-
-                const endNu = getLabelNu();
-                endReturn.argument.elements[0].value = endNu;
-                linerStatements.push(Label(endNu));
-              }
-            ],
-
-            [{ type: 'WhileStatement', test: capture('test'), body: capture('body') }, ({ test, body }) => {
-              const topLabel = Label(getLabelNu());
-              const bodyLabel = Label();
-              const endLabel = Label();
-
-              const ifStat = IfElse(null, Return(), Return());
-
-              linerStatements.push(topLabel);
-              const exprNode = exprReplacer(test);
-              ifStat.test = exprNode;
-              linerStatements.push(ifStat);
-
-              bodyLabel.nu = getLabelNu()
-              linerStatements.push(bodyLabel);
-              ifStat.consequent.argument.elements[0].value = bodyLabel.nu;
-              statReplacer(body);
-
-              linerStatements.push(Return(topLabel.nu));
-
-              endLabel.nu = getLabelNu();
-              linerStatements.push(endLabel);
-              ifStat.alternate.argument.elements[0].value = endLabel.nu;
-            }],
-
-            [{ type: 'FunctionDeclaration', id: { name: capture('name') } }, ({ name }) => {
-              variables.add(name);
-              const newStat = replacer(statNode);
-              linerStatements.push(guard(newStat, [
-                [
-                  { type: 'VariableDeclaration', declarations: pattern.tuple([{ init: capture('init') }]) },
-                  ({ init }) => Assignment(name, init)
-                ],
-                [pattern.unit, () => newStat]
-              ]));
-            }],
-
-            [
-              { type: 'VariableDeclaration', declarations: capture('declarations') },
-              ({ declarations }) => {
-                for (const declarator of declarations) {
-                  variables.add(declarator.id.name);
-                  if (declarator.init) {
-                    const exprNode = exprReplacer(declarator.init);
-                    linerStatements.push(Assignment(declarator.id.name, exprNode));
-                  }
-                }
-              }
-            ],
-            [pattern.unit, () => { linerStatements.push(statNode) }]
-          ]);
-        }
-
-        // 表达式分析器
-        const exprReplacer = exprNode => {
-          const getTempName = (() => {
-            let nu = 0;
-            return () => {
-              const name = `__temp${nu++}`;
-              variables.add(name);
-              return name;
-            };
-          })();
-
-          const nextExprNode = traverse((exprSubNode, exprNext) => guard(exprSubNode, [
-            // FunctionExpression 直接用
-            [{ type: 'FunctionExpression' }, () => replacerNext(exprSubNode)],
-            [{ type: 'AwaitExpression', argument: capture('argument') }, ({ argument }) => {
-              exprNext(argument);
-              const tempName = getTempName();
-              const labelNu = getLabelNu();
-              linerStatements = linerStatements.concat([
-                Return(labelNu, argument),
-                Label(labelNu),
-                Assignment(tempName, Member("__context", "sent")),
-              ]);
-
-              return Identifier(tempName);
-            }],
-            [pattern.unit, () => exprNext(exprSubNode)],
-          ]))(exprNode);
-
-          return nextExprNode;
-        }
-
-        blockReplacer(body);
-
-        // 将线性的代码组装成
-        const cases = linerStatements.reduce((cases, stat) => {
-          if (stat.type === 'Label') {
-            cases.push({
-              type: 'SwitchCase',
-              test: {
-                type: 'Literal',
-                value: stat.nu,
-              },
-              consequent: [],
-            });
-          } else {
-            const last = cases[cases.length - 1];
-            last.consequent.push(stat);
-          }
-          return cases;
-        }, [{
-          type: 'SwitchCase',
-          test: {
-            type: 'Literal',
-            value: 0,
-          },
-          consequent: [],
-        }]);
-
-        const generatorBody = {
-          type: "SwitchStatement",
-          discriminant: Member('__context', 'next'),
-          cases,
-        }
-
-        // 构建基本框架
-        return {
-          type: 'VariableDeclaration',
-          kind: 'var',
-          declarations: [{
-            id: Identifier(name),
-            init: {
-              type: 'CallExpression',
-              callee: {
-                type: 'Identifier',
-                name: '__async', // 增加的 runtime 函数
-              },
-              arguments: [{
-                type: 'FunctionExpression',
-                params,
-                body: {
-                  type: 'BlockStatement',
-                  body: [
-                    // 提出来的变量
-                    variables.size > 0 ? {
-                      type: 'VariableDeclaration',
-                      kind: 'var',
-                      declarations: Array.from(variables).map(name => ({
-                        type: 'VariableDeclarator',
-                        id: {
-                          type: 'Identifier',
-                          name
-                        },
-                      })),
-                    } : { type: 'EmptyStatement' },
-                    // 转换后的函数体
-                    {
-                      type: 'ReturnStatement',
-                      argument: {
-                        type: 'FunctionExpression',
-                        params: [
-                          Identifier('__context'),
-                        ],
-                        body: {
-                          type: 'BlockStatement',
-                          body: [
-                            generatorBody,
-                            Return(-1),
-                          ],
-                        },
-                      },
-                    },
-                  ],
-                },
-              }],
-            },
-          }],
-        };
-      },
-    ],
-    [pattern.unit, () => replacerNext(replacerNode)],
-  ]));
-
-  const targetNode = replacer(sourceNode);
+  const targetNode = asyncTrans(sourceNode);
 
   // 生成代码
   const target = prettier.format(astring.generate(targetNode), {
