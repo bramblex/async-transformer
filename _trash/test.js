@@ -22,7 +22,7 @@ function run(generator) {
           if (next === -1) { 
               return resolve(result);
           } else {
-              context.next = next;
+              context.next = next
               if (result && result.then) {
                   result.then(d => (context.sent = d, step()));
               } else {
