@@ -10,7 +10,7 @@ async function testFunc() {
   var sum = 0;
   var d = 0;
   while (i < 10) {
-    d = d + await delay(1e2, await delay(1e2, i));
+    d = d + await delay(1e1, await delay(1e1, i));
     sum = sum + d;
 
     i++;
@@ -25,6 +25,11 @@ async function testFunc() {
   arr[await delay(1e2, 10)] = 123;
 
   return sum + arr[10];
+}
+
+async function test() {
+  var a = await getA();
+  return a;
 }
 
 module.exports = testFunc;
