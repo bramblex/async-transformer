@@ -27,9 +27,13 @@ async function testFunc() {
   return sum + arr[10];
 }
 
-async function test() {
-  var a = await getA();
-  return a;
+async function test(n) {
+  var i = 10;
+  var sum = 0;
+  while (i > 0) {
+      sum = sum + await getA();
+  }
+  return sum;
 }
 
 module.exports = testFunc;
