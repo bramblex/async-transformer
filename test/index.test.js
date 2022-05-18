@@ -1,4 +1,3 @@
-
 function delay(n, value) {
   return new Promise(function (resolve) {
     setTimeout(function () { resolve(value) }, n);
@@ -35,5 +34,3 @@ async function test(n) {
   }
   return sum;
 }
-
-module.exports = testFunc;
