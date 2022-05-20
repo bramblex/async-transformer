@@ -1,8 +1,8 @@
 import * as acorn from 'acorn';
 import * as astring from 'astring';
-import { createErrorContext } from './common/error';
-import { traverse } from './common/traverse';
-import { Node } from './common/ast';
+import { createLocationContext } from './location';
+import { traverse } from './traverse';
+import { Node } from './ast';
 
 export class Parser {
   public supportedSyntax: Set<acorn.Node['type']> = new Set([
@@ -61,14 +61,14 @@ export class Parser {
 
   private prepare(_root: acorn.Node, source: string): Node {
     const root = _root as Node;
-    traverse<Node, null>((node, ctx, next) => {
+    traverse<Node, null>(root, null, (node, ctx, next) => {
       if (!this.supportedSyntax.has(node.type)) {
         const { line, column } = node.loc.start;
-        const message = `Unsupported Syntax ${node.type} at line ${line}, column ${column}\n${createErrorContext(source, { line, column })}`
+        const message = `Unsupported Syntax ${node.type} at line ${line}, column ${column}\n${createLocationContext(source, { line, column })}`
         throw new Error(message);
       }
       return next(node, ctx);
-    })(root, null);
+    });
     return root as Node;
   }
 

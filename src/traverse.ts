@@ -23,8 +23,13 @@ function traverseChildren<N extends BaseNode, C>(func: (node: N, ctx: C) => N) {
   }
 }
 
-export function traverse<N extends BaseNode, C>(func: (node: N, ctx: C, next: (node: N, ctx: C) => N) => N) {
+export function createTraverse<N extends BaseNode, C>(func: (node: N, ctx: C, next: (node: N, ctx: C) => N) => N) {
   const _traverse = (node: N, ctx: C): N => func(node, ctx, _traverseChildren);
   const _traverseChildren = traverseChildren(_traverse);
   return _traverse;
+};
+
+export function traverse<N extends BaseNode, C>(node: N, ctx: C, func: (node: N, ctx: C, next: (node: N, ctx: C) => N) => N) {
+  const _traverse = createTraverse(func);
+  return _traverse(node, ctx);
 };
