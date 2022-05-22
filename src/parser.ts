@@ -61,13 +61,13 @@ export class Parser {
 
   private prepare(_root: acorn.Node, source: string): Node {
     const root = _root as Node;
-    traverse<Node, null>(root, null, (node, ctx, next) => {
+    traverse<Node>(root, null, ({ node, traverseChildren }) => {
       if (!this.supportedSyntax.has(node.type)) {
         const { line, column } = node.loc.start;
         const message = `Unsupported Syntax ${node.type} at line ${line}, column ${column}\n${createLocationContext(source, { line, column })}`
         throw new Error(message);
       }
-      return next(node, ctx);
+      return traverseChildren(node, null);
     });
     return root as Node;
   }

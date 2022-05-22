@@ -8,13 +8,11 @@ interface BaseNodeWithoutComments {
 interface BaseNode extends BaseNodeWithoutComments {
   leadingComments?: Array<Comment> | undefined;
   trailingComments?: Array<Comment> | undefined;
-}
 
-interface BaseScopedNode {
+  // 增加分析信息
   scope?: Scope;
+  variable?: Variable;
 }
-
-export type ScopedNode = Program | Function | SwitchStatement | ForStatement | ForInStatement | CatchClause;
 
 export type Node =
   Identifier | Literal | Program | Function | SwitchCase | CatchClause |
@@ -35,14 +33,14 @@ export interface Position {
   column: number;
 }
 
-export interface Program extends BaseNode, BaseScopedNode {
+export interface Program extends BaseNode {
   type: "Program";
   sourceType: "script";
   body: Array<Statement>;
   comments?: Array<Comment> | undefined;
 }
 
-interface BaseFunction extends BaseNode, BaseScopedNode {
+interface BaseFunction extends BaseNode {
   params: Array<Identifier>;
   generator?: boolean | undefined;
   async?: boolean | undefined;
@@ -65,7 +63,7 @@ export interface EmptyStatement extends BaseStatement {
   type: "EmptyStatement";
 }
 
-export interface BlockStatement extends BaseStatement, BaseScopedNode {
+export interface BlockStatement extends BaseStatement {
   type: "BlockStatement";
   body: Array<Statement>;
   innerComments?: Array<Comment> | undefined;
@@ -99,13 +97,7 @@ export interface ContinueStatement extends BaseStatement {
   label?: Identifier | null | undefined;
 }
 
-export interface WithStatement extends BaseStatement {
-  type: "WithStatement";
-  object: Expression;
-  body: Statement;
-}
-
-export interface SwitchStatement extends BaseStatement, BaseScopedNode {
+export interface SwitchStatement extends BaseStatement {
   type: "SwitchStatement";
   discriminant: Expression;
   cases: Array<SwitchCase>;
@@ -140,7 +132,7 @@ export interface DoWhileStatement extends BaseStatement {
   test: Expression;
 }
 
-export interface ForStatement extends BaseStatement, BaseScopedNode {
+export interface ForStatement extends BaseStatement {
   type: "ForStatement";
   init?: VariableDeclaration | Expression | null | undefined;
   test?: Expression | null | undefined;
@@ -148,7 +140,7 @@ export interface ForStatement extends BaseStatement, BaseScopedNode {
   body: Statement;
 }
 
-interface ForInStatement extends BaseStatement, BaseScopedNode {
+interface ForInStatement extends BaseStatement {
   type: "ForInStatement";
   left: VariableDeclaration | Identifier;
   right: Expression;
@@ -300,7 +292,7 @@ export interface SwitchCase extends BaseNode {
   consequent: Array<Statement>;
 }
 
-export interface CatchClause extends BaseNode, BaseScopedNode {
+export interface CatchClause extends BaseNode {
   type: "CatchClause";
   param: Identifier;
   body: BlockStatement;
@@ -309,8 +301,6 @@ export interface CatchClause extends BaseNode, BaseScopedNode {
 export interface Identifier extends BaseNode, BaseExpression {
   type: "Identifier";
   name: string;
-
-  variable?: Variable;
 }
 
 export type Literal = SimpleLiteral | RegExpLiteral;
