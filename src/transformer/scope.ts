@@ -1,3 +1,4 @@
+import { v4 as uuid } from 'uuid';
 import { Node, Identifier, Kind, Program } from "./ast";
 import { traverse } from "./traverse";
 
@@ -8,15 +9,16 @@ export enum ScopeType {
 }
 
 export class Variable {
+  readonly id: string = uuid();
   readonly scope: Scope;
   readonly referencedScope: Scope[] = [];
   readonly kind: Kind;
   name: string;
 
-  readonly declaration: Identifier;
+  readonly declaration: Identifier | null;
   readonly references: Identifier[] = [];
 
-  constructor(scope: Scope, kind: Kind, name: string, identifier: Identifier) {
+  constructor(scope: Scope, kind: Kind, name: string, identifier: Identifier | null) {
     this.scope = scope;
     this.kind = kind;
     this.name = name;
@@ -32,6 +34,10 @@ export class Variable {
 
     // 更新所有引用当前变量的作用域
     this.name = name;
+
+    if (!this.declaration) {
+      throw new Error(`Can not rename unconstrained variable`);
+    }
 
     // 更新所有引用该变量 Identifier 节点
     this.declaration.name = name;
@@ -51,6 +57,7 @@ export class Variable {
 
 // 作用域
 export class Scope {
+  readonly id: string = uuid();
   readonly type: ScopeType;
   readonly node?: Node;
   readonly parent?: Scope;
@@ -75,7 +82,7 @@ export class Scope {
   }
 
   // 声明变量
-  declare(kind: Kind, name: string, identifier: Identifier): Variable {
+  declare(kind: Kind, name: string, identifier: Identifier | null): Variable {
     let scope: Scope = this;
 
     // 找到最近的可以声明变量的函数作用域
@@ -92,10 +99,9 @@ export class Scope {
   link(name: string, identifier: Identifier): Variable {
     const variable = this.constrainedVariables.get(name);
     if (!variable) {
-      if (!this.parent) {
-        throw new Error(`Undeclared variable ${name}`);
-      }
-      const parentVariable = this.parent.link(name, identifier);
+      const parentVariable = this.parent
+        ? this.parent.link(name, identifier)
+        : this.declare('let', name, null);
       this.freeVariables.set(name, parentVariable);
       parentVariable.referencedScope.push(this);
       return parentVariable;
@@ -108,13 +114,16 @@ export class Scope {
 
   // 确认变量名是否可用
   isAvailableName(name: string): boolean {
-    // 当前作用域中无同名的约束变量和自由变量
-    return !this.constrainedVariables.has(name) && !this.freeVariables.has(name);
+    return (
+      /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)
+      && !this.constrainedVariables.has(name)
+      && !this.freeVariables.has(name)
+    );
   }
 
   // 获取一个可用的变量名
   getAvailableName(referenceName: string = 'v'): string {
-    const [, prefix, nu] = referenceName.match(/^([\w_\$]+?)(\d*)$/) as string[];
+    const [, prefix, nu] = referenceName.match(/^([\w_$]+?)(\d*)$/) as string[];
     let i = parseInt(nu || '0');
     for (i; this.isAvailableName(`${prefix}${i || ''}`); i++);
     return `${prefix}${i || ''}`;
@@ -193,6 +202,10 @@ export class Scope {
         // 过滤掉声明使用的标识符
 
         const [parent, key] = path[path.length - 1];
+
+        if (node.name === 'loop') {
+          debugger;
+        }
 
         switch (parent.type) {
 

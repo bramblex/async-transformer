@@ -89,10 +89,10 @@ export function traverseChildren<N extends TraverseNode, C>(node: N, ctx: C, tra
     const child = node[key] as TraverseNode | TraverseNode[];
     if (Array.isArray(child)) {
       for (let i = 0; i < child.length; i++) {
-        child[i] = child[i] && traverse(child[i] as N, ctx, [...path, [child[i] as N, key, i]]);
+        child[i] = child[i] && traverse(child[i] as N, ctx, [...path, [node, key, i]]);
       }
-    } else {
-      (node as TraverseNode)[key] = traverse(node[key], ctx, [...path, [child as N, key, 0]]);
+    } else if (node[key]) {
+      (node as TraverseNode)[key] = traverse(node[key], ctx, [...path, [node, key, 0]]);
     }
   }
   return node;
