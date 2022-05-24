@@ -59,7 +59,7 @@ export function App() {
 
   const [result, setResult] = useState(<></>);
 
-  const calculate = useMemo(() => debounce(function calculate(source: string) {
+  const calculate = useMemo(() => function calculate(source: string) {
     try {
       const parser = new Parser();
       const program = parser.parse(source);
@@ -121,7 +121,7 @@ export function App() {
       setResult(<span style={{ color: 'red' }}>{m}</span>);
       throw err;
     }
-  }, 1e3), []);
+  }, []);
 
   // useEffect(() => {
   //   calculate(code);
