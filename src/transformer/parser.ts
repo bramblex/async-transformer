@@ -2,7 +2,7 @@ import * as acorn from 'acorn';
 import * as astring from 'astring';
 import { createLocationContext } from './location';
 import { traverse } from './traverse';
-import { Node } from './ast';
+import { Expression, Node, Program } from './ast';
 
 export class Parser {
   public supportedSyntax: Set<acorn.Node['type']> = new Set([
@@ -72,12 +72,12 @@ export class Parser {
     return root as Node;
   }
 
-  parse(source: string) {
-    return this.prepare(acorn.parse(source, this.defaultParseOptions), source);
+  parse(source: string): Program {
+    return this.prepare(acorn.parse(source, this.defaultParseOptions), source) as Program;
   }
 
-  parseExpression(source: string) {
-    return this.prepare(acorn.parseExpressionAt(source, 0, this.defaultParseOptions), source);
+  parseExpression(source: string): Expression {
+    return this.prepare(acorn.parseExpressionAt(source, 0, this.defaultParseOptions), source) as Expression;
   }
 
   generate(node: Node) {

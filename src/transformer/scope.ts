@@ -9,8 +9,9 @@ export enum ScopeType {
 
 export class Variable {
   readonly scope: Scope;
+  readonly referencedScope: Scope[] = [];
   readonly kind: Kind;
-  readonly name: string;
+  name: string;
 
   readonly declaration: Identifier;
   readonly references: Identifier[] = [];
@@ -21,20 +22,45 @@ export class Variable {
     this.name = name;
     this.declaration = identifier;
   }
+
+  rename(name: string) {
+    if (!this.scope.isAvailableName(name)) {
+      throw new Error(`Variable ${name} is conflicted.`);
+    }
+
+    const oldName = this.name;
+
+    // 更新所有引用当前变量的作用域
+    this.name = name;
+
+    // 更新所有引用该变量 Identifier 节点
+    this.declaration.name = name;
+    for (const ref of this.references) {
+      ref.name = name;
+    }
+
+    // 更新所有引用当前变量的作用域中
+    this.scope.constrainedVariables.delete(oldName);
+    this.scope.constrainedVariables.set(name, this);
+    for (const scope of this.referencedScope) {
+      scope.freeVariables.delete(oldName);
+      scope.freeVariables.set(name, this);
+    }
+  }
 }
 
 // 作用域
 export class Scope {
-  public readonly type: ScopeType;
-  public readonly node?: Node;
-  public readonly parent?: Scope;
+  readonly type: ScopeType;
+  readonly node?: Node;
+  readonly parent?: Scope;
 
   // 当前作用域声明的变量(约束变量)
-  private constrainedVariables: Map<string, Variable> = new Map();
+  readonly constrainedVariables: Map<string, Variable> = new Map();
   // 自由变量
-  private freeVariables: Set<Variable> = new Set();
+  readonly freeVariables: Map<string, Variable> = new Map();
   // 子作用域
-  private children: Scope[] = [];
+  readonly children: Scope[] = [];
 
   // 将 Scope 和 AST Node 关联起来
   constructor(type: ScopeType, node?: Node, parent?: Scope) {
@@ -70,7 +96,8 @@ export class Scope {
         throw new Error(`Undeclared variable ${name}`);
       }
       const parentVariable = this.parent.link(name, identifier);
-      this.freeVariables.add(parentVariable);
+      this.freeVariables.set(name, parentVariable);
+      parentVariable.referencedScope.push(this);
       return parentVariable;
     }
 
@@ -78,22 +105,26 @@ export class Scope {
     variable.references.push(identifier);
     return variable;
   }
-}
 
-// 作用域分析
-export class ScopeAnalyzer {
-  readonly program: Program;
-  readonly rootScope: Scope;
-  readonly source: string;
+  // 确认变量名是否可用
+  isAvailableName(name: string): boolean {
+    // 当前作用域中无同名的约束变量和自由变量
+    return !this.constrainedVariables.has(name) && !this.freeVariables.has(name);
+  }
 
-  constructor(source: string, program: Program, rootScope: Scope = new Scope(ScopeType.Function)) {
-    this.source = source;
-    this.program = JSON.parse(JSON.stringify(program));
-    this.rootScope = rootScope;
+  // 获取一个可用的变量名
+  getAvailableName(referenceName: string = 'v'): string {
+    const [, prefix, nu] = referenceName.match(/^([\w_\$]+?)(\d*)$/) as string[];
+    let i = parseInt(nu || '0');
+    for (i; this.isAvailableName(`${prefix}${i || ''}`); i++);
+    return `${prefix}${i || ''}`;
+  }
 
+  // 作用域分析
+  static analyze(program: Program, rootScope: Scope = new Scope(ScopeType.Function)): Scope {
     // 因为会存在变量提升的问题，遍历两边做变量分析比较方便
     // 构建作用域和变量声明
-    traverse<Node, Scope>(this.program, rootScope, ({ node, ctx: scope, traverseChildren }) => {
+    traverse<Node, Scope>(program, rootScope, ({ node, ctx: scope, traverseChildren }) => {
       switch (node.type) {
         case 'Program': {
           node.scope = scope;
@@ -153,12 +184,14 @@ export class ScopeAnalyzer {
     });
 
     // 构建变量引用
-    traverse<Node>(this.program, this.program, ({ node, path, traverseChildren }) => {
+    traverse<Node>(program, program, ({ node, path, traverseChildren }) => {
       const scope = node.scope;
 
       if (!scope) {
         throw new Error(`Unexpected Error`);
       } else if (node.type === 'Identifier' && !node.variable) {
+        // 过滤掉声明使用的标识符
+
         const [parent, key] = path[path.length - 1];
 
         switch (parent.type) {
@@ -174,8 +207,8 @@ export class ScopeAnalyzer {
             }
             break;
 
-          case  'MemberExpression':
-            if (key === 'program' && !parent.computed) {
+          case 'MemberExpression':
+            if (key === 'property' && !parent.computed) {
               return traverseChildren(node, null);
             }
             break;
@@ -186,13 +219,8 @@ export class ScopeAnalyzer {
 
       return traverseChildren(node, null);
     });
+
+    return rootScope;
   }
 
-  // 变量重命名
-  rename(variable: Variable, name: string) {
-  }
-
-  // 获取一个可用的变量名
-  getAvailableVariableName(scope: Scope, referenceName?: string): string {
-  }
 }
