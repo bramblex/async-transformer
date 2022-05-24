@@ -60,65 +60,72 @@ export function App() {
   const [result, setResult] = useState(<></>);
 
   const calculate = useMemo(() => debounce(function calculate(source: string) {
-    const parser = new Parser();
-    const program = parser.parse(source);
-    Scope.analyze(program);
+    try {
+      const parser = new Parser();
+      const program = parser.parse(source);
+      Scope.analyze(program);
 
-    const chunks: JSX.Element[] = [];
+      const chunks: JSX.Element[] = [];
 
-    const tail = astring.generate(program, {
-      generator: {
-        ...astring.GENERATOR,
-        Identifier: function (_node, state) {
-          const node = _node as Identifier;
-          if (node.variable) {
-            chunks.push(<>{state.output}</>);
-            chunks.push(<VariableBlock node={node} />);
-            state.output = '';
-          } else {
-            state.write(node.name);
-          }
-        },
-        FunctionDeclaration: function (node, state) {
-          state.write(
-            (node.async ? 'async ' : '') +
-            (node.generator ? 'function* ' : 'function '),
-            node,
-          )
-
-          if (node.id) {
-            this['Identifier'](node.id, state);
-          }
-
-          const nodes = node.params as Identifier[];
-          state.write('(')
-          if (nodes != null && nodes.length > 0) {
-            this[nodes[0].type](nodes[0], state)
-            const { length } = nodes
-            for (let i = 1; i < length; i++) {
-              const param = nodes[i]
-              state.write(', ')
-              this[param.type](param, state)
+      const tail = astring.generate(program, {
+        generator: {
+          ...astring.GENERATOR,
+          Identifier: function (_node, state) {
+            const node = _node as Identifier;
+            if (node.variable) {
+              chunks.push(<>{state.output}</>);
+              chunks.push(<VariableBlock node={node} />);
+              state.output = '';
+            } else {
+              state.write(node.name);
             }
-          }
-          state.write(')')
+          },
+          FunctionDeclaration: function (node, state) {
+            state.write(
+              (node.async ? 'async ' : '') +
+              (node.generator ? 'function* ' : 'function '),
+              node,
+            )
 
-          state.write(' ')
-          this[node.body.type](node.body, state)
-        },
-        FunctionExpression: function (node, state) {
-          return this.FunctionDeclaration(node as any, state);
-        },
-      }
-    });
+            if (node.id) {
+              this['Identifier'](node.id, state);
+            }
 
-    chunks.push(<>{tail}</>);
-    setResult(<>{chunks}</>);
+            const nodes = node.params as Identifier[];
+            state.write('(')
+            if (nodes != null && nodes.length > 0) {
+              this[nodes[0].type](nodes[0], state)
+              const { length } = nodes
+              for (let i = 1; i < length; i++) {
+                const param = nodes[i]
+                state.write(', ')
+                this[param.type](param, state)
+              }
+            }
+            state.write(')')
+
+            state.write(' ')
+            this[node.body.type](node.body, state)
+          },
+          FunctionExpression: function (node, state) {
+            return this.FunctionDeclaration(node as any, state);
+          },
+        }
+      });
+
+      chunks.push(<>{tail}</>);
+      setResult(<>{chunks}</>);
+    } catch (err) {
+      const m = `${(err as Error).stack}`;
+      console.error(m);
+      setResult(<span style={{ color: 'red' }}>{m}</span>);
+      throw err;
+    }
   }, 1e3), []);
 
-  useEffect(() => {
-    calculate(code);
-  }, [code]);
+  // useEffect(() => {
+  //   calculate(code);
+  // }, [code]);
 
   return (
     <div>
@@ -128,13 +135,13 @@ export function App() {
 
         <div className={sheet.main}>
           <div className={sheet.left}>
-            <h2>代码:</h2>
+            <h2>代码: <button onClick={() => calculate(code)}>分析</button></h2>
             <textarea className={sheet.code} value={code} onChange={ev => setCode(ev.target.value)}>
             </textarea>
           </div>
 
           <div className={sheet.right}>
-            <h2>结果:</h2>
+            <h2>结果: </h2>
             <pre className={sheet.view}>
               {result}
             </pre>
