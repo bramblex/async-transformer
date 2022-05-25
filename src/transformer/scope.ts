@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { Node, Identifier, Kind, Program } from "./ast";
+import { Node, Identifier, Kind, Program, VariableDeclaration, SequenceExpression, AssignmentExpression } from "./ast";
 import { traverse } from "./traverse";
 
 export enum ScopeType {
@@ -26,7 +26,7 @@ export class Variable {
   }
 
   rename(name: string) {
-    if (!this.scope.isAvailableName(name)) {
+    if (!this.scope.isAvailableName(name, this)) {
       throw new Error(`Variable ${name} is conflicted.`);
     }
 
@@ -81,17 +81,21 @@ export class Scope {
     }
   }
 
-  // 声明变量
-  declare(kind: Kind, name: string, identifier: Identifier | null): Variable {
+  getFunctionScope() {
     let scope: Scope = this;
-
-    // 找到最近的可以声明变量的函数作用域
-    while (kind === 'var' && scope.parent && scope.type !== ScopeType.Function) {
+    while (scope.parent && scope.type !== ScopeType.Function) {
       scope = scope.parent;
     }
+    return scope;
+  }
 
-    const variable = this.constrainedVariables.get(name) || new Variable(this, kind, name, identifier);
-    this.constrainedVariables.set(name, variable);
+  // 声明变量
+  declare(kind: Kind, name: string, identifier: Identifier | null): Variable {
+    // 找到最近的可以声明变量的函数作用域
+    let scope: Scope = kind === 'var' ? this.getFunctionScope() : this;
+
+    const variable = scope.constrainedVariables.get(name) || new Variable(scope, kind, name, identifier);
+    scope.constrainedVariables.set(name, variable);
     return variable;
   }
 
@@ -113,20 +117,49 @@ export class Scope {
   }
 
   // 确认变量名是否可用
-  isAvailableName(name: string): boolean {
-    return (
-      /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)
-      && !this.constrainedVariables.has(name)
-      && !this.freeVariables.has(name)
-    );
+  isAvailableName(name: string, variable?: Variable): boolean {
+    if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)) {
+      return false;
+    }
+    const v = this.constrainedVariables.get(name) || this.freeVariables.get(name);
+    if (v === variable) {
+      return true;
+    }
+    return !v;
   }
 
   // 获取一个可用的变量名
-  getAvailableName(referenceName: string = 'v'): string {
-    const [, prefix, nu] = referenceName.match(/^([\w_$]+?)(\d*)$/) as string[];
-    let i = parseInt(nu || '0');
-    for (i; this.isAvailableName(`${prefix}${i || ''}`); i++);
-    return `${prefix}${i || ''}`;
+  getAvailableName(referenceName?: string, variable?: Variable, excludes: Set<string> = new Set()): string {
+    if (referenceName) {
+      const [, prefix, nu] = referenceName.match(/^([\w_$]+?)(\d*)$/) as string[];
+      let i = parseInt(nu || '0');
+      let name = `${prefix}${i || ''}`;
+      while (!this.isAvailableName(name, variable) || excludes.has(name)) {
+        i++;
+        name = `${prefix}${i || ''}`;
+      }
+      return name;
+    } else {
+      function toNumberSystem26(n: number): string {
+        let s = '';
+        while (n > 0) {
+          let m = n % 26;
+          if (m === 0) m = 26;
+          s = String.fromCharCode(m + 96) + s;
+          n = (n - m) / 26;
+        }
+        return s;
+      }
+
+      let i = 1;
+      let name = toNumberSystem26(i);
+      while (!this.isAvailableName(name, variable) || excludes.has(name)) {
+        i++;
+        name = toNumberSystem26(i);
+      }
+
+      return name;
+    }
   }
 
   // 作用域分析
@@ -136,8 +169,8 @@ export class Scope {
     traverse<Node, Scope>(program, rootScope, ({ node, ctx: scope, traverseChildren }) => {
       switch (node.type) {
         case 'Program': {
-          node.scope = scope;
-          return traverseChildren(node, scope);
+          node.scope = new Scope(ScopeType.Function, node, scope);
+          return traverseChildren(node, node.scope);
         }
 
         case 'SwitchStatement':
@@ -203,10 +236,6 @@ export class Scope {
 
         const [parent, key] = path[path.length - 1];
 
-        if (node.name === 'loop') {
-          debugger;
-        }
-
         switch (parent.type) {
 
           case 'LabeledStatement':
@@ -234,6 +263,130 @@ export class Scope {
     });
 
     return rootScope;
+  }
+
+  static simplify(scope: Scope) {
+    for (const v of [...scope.constrainedVariables.values()]) {
+      const newName = scope.getAvailableName(undefined, v);
+      if (v.declaration) {
+        v.rename(newName);
+      }
+    }
+    scope.children.map(Scope.simplify);
+  }
+
+  static let2Var(program: Program): Program {
+    // 提升变量声明
+    traverse<Node>(program, null, ({ node, traverseChildren }) => {
+      if (node.type === 'VariableDeclaration' && node.kind !== 'var') {
+        for (const d of node.declarations) {
+          const scope = d.scope;
+          if (!scope) {
+            throw new Error(`Unexpected Error`);
+          }
+          const funcScope = scope.getFunctionScope();
+          let tmpScope = scope;
+          const excludes: Set<string> = new Set();
+          const variable = d.id.variable as Variable;
+
+          while (tmpScope !== funcScope) {
+            tmpScope.constrainedVariables.forEach(v => excludes.add(v.name));
+            if (tmpScope === scope) {
+              excludes.delete(variable.name);
+            }
+            tmpScope.freeVariables.forEach(v => excludes.add(v.name));
+            tmpScope = tmpScope.parent as Scope;
+          }
+
+          const newName = funcScope.getAvailableName(variable.name, variable, excludes);
+
+          variable.rename(newName);
+          variable.scope.constrainedVariables.delete(variable.name);
+          funcScope.constrainedVariables.set(variable.name, variable);
+          scope.link(variable.name, variable.declaration as Identifier);
+        }
+      }
+
+      return traverseChildren(node, null);
+    });
+
+    return traverse<Node>(program, null, ({ node, traverseChildren, path }) => {
+      const [parent, key] = path[path.length - 1] || [];
+
+      switch (node.type) {
+        case 'VariableDeclaration': {
+          if (parent.type === 'ForInStatement' && key === 'left') {
+            node = (parent.left as VariableDeclaration).declarations[0].id
+          } else {
+            let seq = {
+              ...(node as any),
+              type: 'SequenceExpression',
+              expressions: node.declarations.map(d => {
+                if (!d.init) {
+                  return d.id;
+                }
+                return {
+                  ...(d as any),
+                  type: 'AssignmentExpression',
+                  operator: '=',
+                  left: d.id,
+                  right: d.init,
+                } as AssignmentExpression;
+              })
+            }
+
+            if (seq.expressions.length === 1) {
+              seq = seq.expressions[0];
+            }
+
+            if (parent.type === 'ForStatement' && key === 'init') {
+              node = seq
+            } else {
+              node = {
+                ...(node as any),
+                type: 'ExpressionStatement',
+                expression: seq,
+              }
+            }
+          }
+          break;
+        }
+
+
+        case 'Program':
+        case 'FunctionDeclaration':
+        case 'FunctionExpression': {
+          const scope = node.scope;
+          if (!scope) {
+            throw new Error(`unexpected error`);
+          }
+          traverseChildren(node, null);
+          const body = Array.isArray(node.body) ? node.body : node.body.body;
+
+          body.unshift({
+            ...(node as any),
+            type: 'VariableDeclaration',
+            kind: 'var',
+            declarations: [...scope.constrainedVariables.values()].map(v => {
+              const id = {
+                type: 'Identifier',
+                name: v.name,
+                scope,
+                variable: v,
+              } as Identifier;
+              v.references.push(id);
+              return {
+                type: 'VariableDeclarator',
+                id,
+              }
+            })
+          });
+          return node;
+        }
+      }
+
+      return traverseChildren(node, null);
+    }) as Program;
   }
 
 }
